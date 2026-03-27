@@ -1,5 +1,4 @@
 // Schema types for SMF Project Forge
-// These map to the Turso SQLite tables.
 
 export interface Project {
   id: string;
@@ -8,7 +7,7 @@ export interface Project {
   description: string | null;
   phase: number;
   status: "active" | "completed" | "archived";
-  createdAt: number; // Unix timestamp (ms)
+  createdAt: number;
   updatedAt: number;
 }
 
@@ -41,23 +40,4 @@ export interface Artifact {
   status: "draft" | "edited" | "published";
   createdAt: number;
   updatedAt: number;
-}
-
-export interface AgentStatus {
-  id: string;
-  name: string;
-  team: "rafael" | "aiona" | "gabriel";
-  model: string | null;
-  currentTask: string | null;
-  status: "active" | "idle" | "blocked";
-  updatedAt: number;
-}
-
-export interface QueueEntry {
-  id: string;
-  queue: string;
-  machine: string;
-  action: string;
-  entry: string; // JSON string
-  createdAt: number;
 }

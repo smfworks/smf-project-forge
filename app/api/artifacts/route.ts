@@ -1,20 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
-import { artifacts } from "@/lib/schema";
-import { eq } from "drizzle-orm";
-import { randomUUID } from "crypto";
+import { listArtifacts, createArtifact } from "@/lib/db";
 
-// GET /api/artifacts?projectId=xxx
-// POST /api/artifacts
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const projectId = searchParams.get("projectId");
   try {
-    const db = getDb();
-    const result = projectId
-      ? db.select().from(artifacts).where(eq(artifacts.projectId, projectId)).all()
-      : db.select().from(artifacts).all();
-    return NextResponse.json(result);
+    const artifacts = await listArtifacts(projectId || undefined);
+    return NextResponse.json(artifacts);
   } catch (err) {
     return NextResponse.json({ error: "Failed to fetch artifacts" }, { status: 500 });
   }
@@ -27,25 +19,8 @@ export async function POST(req: NextRequest) {
     if (!projectId || !type || !title) {
       return NextResponse.json({ error: "projectId, type, and title are required" }, { status: 400 });
     }
-    const db = getDb();
-    const now = new Date();
-    const newArtifact = {
-      id: randomUUID(),
-      projectId,
-      phase,
-      type,
-      title,
-      content: content || null,
-      gdocUrl: gdocUrl || null,
-      localPath: localPath || null,
-      agentId: agentId || null,
-      version: 1,
-      status: "draft" as const,
-      createdAt: now,
-      updatedAt: now,
-    };
-    db.insert(artifacts).values(newArtifact).run();
-    return NextResponse.json(newArtifact, { status: 201 });
+    const artifact = await createArtifact({ projectId, phase, type, title, content, gdocUrl, localPath, agentId });
+    return NextResponse.json(artifact, { status: 201 });
   } catch (err) {
     return NextResponse.json({ error: "Failed to create artifact" }, { status: 500 });
   }

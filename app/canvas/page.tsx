@@ -42,12 +42,13 @@ export default function CanvasPage() {
       .then((r) => r.json())
       .then((data) => {
         setProjects(data);
+        // Auto-select first project if none selected
         if (data.length > 0 && !selectedProject) {
           selectProject(data[0]);
         }
       })
       .catch(console.error);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectProject = async (project: Project) => {
     setSelectedProject(project);

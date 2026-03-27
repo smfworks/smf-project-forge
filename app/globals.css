@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
@@ -21,11 +22,8 @@
 
   /* Team colors */
   --color-rafael: #F59E0B;
-  --color-rafael-dim: #F59E0B/20;
   --color-aiona: #F97316;
-  --color-aiona-dim: #F97316/20;
   --color-gabriel: #14B8A6;
-  --color-gabriel-dim: #14B8A6/20;
 
   /* Semantic */
   --color-success: #22C55E;

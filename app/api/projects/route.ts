@@ -1,47 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
-import { projects } from "@/lib/schema";
-import { eq } from "drizzle-orm";
-import { randomUUID } from "crypto";
+import { listProjects, createProject } from "@/lib/db";
 
-// GET /api/projects — List all projects
-// POST /api/projects — Create a new project
+export const dynamic = "force-dynamic";
+
+// GET /api/projects
 export async function GET() {
   try {
-    const db = getDb();
-    const all = db.select().from(projects).all();
-    return NextResponse.json(all);
-  } catch (err) {
+    const projects = await listProjects();
+    return NextResponse.json(projects);
+  } catch (error) {
+    console.error("GET /api/projects error:", error);
     return NextResponse.json({ error: "Failed to fetch projects" }, { status: 500 });
   }
 }
 
+// POST /api/projects
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name, type = "other" } = body;
-
+    const { name, type = "other", description } = body;
     if (!name) {
       return NextResponse.json({ error: "Project name is required" }, { status: 400 });
     }
-
-    const db = getDb();
-    const now = new Date();
-    const newProject = {
-      id: randomUUID(),
-      name,
-      type,
-      phase: 0,
-      status: "active" as const,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    db.insert(projects).values(newProject).run();
-    return NextResponse.json(newProject, { status: 201 });
-  } catch (err) {
+    const project = await createProject({ name, type, description });
+    return NextResponse.json(project, { status: 201 });
+  } catch (error) {
+    console.error("POST /api/projects error:", error);
     return NextResponse.json({ error: "Failed to create project" }, { status: 500 });
   }
 }
-
-export const dynamic = "force-dynamic";

@@ -132,22 +132,21 @@ export const AGENTS: AgentConfig[] = [
 
   // ── Aiona — Content & Writing ───────────────────────────────────────────
   {
-    id: "hunter-haley",
-    name: "Hunter Haley",
-    team: "aiona",
-    role: "Content scout — identifies trends, opportunities, and content angles",
-    model: "minimax-m2.7:cloud",
-    emoji: "🔍",
-    gateway: "aiona",
-  },
-  // Aiona Edge — primary agent (this is Michael's main AI assistant)
-  {
     id: "aiona-edge",
     name: "Aiona Edge",
     team: "aiona",
     role: "Primary AI assistant to Michael — orchestration, writing, research, coordination",
     model: "minimax-m2.7:cloud",
     emoji: "🎯",
+    gateway: "aiona",
+  },
+  {
+    id: "hunter-haley",
+    name: "Hunter Haley",
+    team: "aiona",
+    role: "Content scout — identifies trends, opportunities, and content angles",
+    model: "minimax-m2.7:cloud",
+    emoji: "🔍",
     gateway: "aiona",
   },
   {

@@ -9,44 +9,48 @@ export async function GET() {
     const cache = await getAgentStatusCache();
     const now = Date.now();
 
-    // Deduplicate by (gateway, agentId) — one canonical entry per agent
-    const seen = new Set<string>();
-    const agentEntries: typeof cache = [];
-
-    // Sort by lastSeen descending so we keep the most recent for each agent
-    const sorted = [...cache].sort((a, b) => (b.lastSeen ?? 0) - (a.lastSeen ?? 0));
-
-    for (const entry of sorted) {
-      const key = `${entry.gateway}:${entry.agentId}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        agentEntries.push(entry);
+    // Step 1: Deduplicate by sessionKey — keep most recent entry per session
+    const byKey: Record<string, typeof cache[0]> = {};
+    for (const entry of cache) {
+      const existing = byKey[entry.sessionKey];
+      if (!existing || (entry.lastSeen ?? 0) > (existing.lastSeen ?? 0)) {
+        byKey[entry.sessionKey] = entry;
       }
     }
 
-    // Build a lookup: agentId → cache entry
-    const cacheByAgentId: Record<string, typeof cache[0]> = {};
-    for (const entry of agentEntries) {
-      // Exact agentId match
-      if (!cacheByAgentId[entry.agentId]) {
-        cacheByAgentId[entry.agentId] = entry;
+    // Step 2: Match sessions to config agents
+    // Map of agentId → canonical cache entry
+    const agentCache: Record<string, typeof cache[0]> = {};
+
+    for (const [sessionKey, entry] of Object.entries(byKey)) {
+      const agentId = entry.agentId;
+
+      // Exact match — session's agentId matches a config agent
+      if (!agentCache[agentId]) {
+        agentCache[agentId] = entry;
       }
-      // Also map main session → aiona-edge (Michael's primary AI)
-      if (entry.sessionKey === "agent:main:main" && !cacheByAgentId["aiona-edge"]) {
-        cacheByAgentId["aiona-edge"] = entry;
+
+      // Special case: agent:main:main → aiona-edge (Michael's primary AI)
+      if (sessionKey === "agent:main:main" && !agentCache["aiona-edge"]) {
+        agentCache["aiona-edge"] = entry;
+      }
+
+      // Special case: cron sessions for Rafael's team
+      if (sessionKey.includes(":cron:") && !agentCache["rafael"]) {
+        agentCache["rafael"] = entry;
       }
     }
 
-    // For each config agent, look up its live status
+    // Step 3: Build final status list — all config agents, with live status overlaid
     const statuses = AGENTS.map((agent) => {
-      const entry = cacheByAgentId[agent.id];
+      const entry = agentCache[agent.id];
       const team = TEAMS[agent.team];
 
-      // Derive status from session age — always check current time, not cached status
+      // Derive status from session age at read time (always fresh)
       let status: "active" | "idle" | "blocked" = "idle";
       if (entry) {
-        const ageMs = now - (entry.updatedAt ?? entry.lastSeen);
-        if (ageMs < 600_000) status = "active";       // session updated < 10 min ago
+        const ageMs = now - (entry.updatedAt ?? entry.lastSeen ?? now);
+        if (ageMs < 600_000) status = "active";     // updated < 10 min ago
         else if (entry.status === "blocked") status = "blocked";
       }
 

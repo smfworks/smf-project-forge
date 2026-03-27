@@ -30,9 +30,19 @@ export async function GET() {
         agentCache[agentId] = entry;
       }
 
-      // Special case: agent:main:main → aiona-edge (Michael's primary AI)
+      // Also map main session → aiona-edge (Michael's primary AI)
       if (sessionKey === "agent:main:main" && !agentCache["aiona-edge"]) {
         agentCache["aiona-edge"] = entry;
+      }
+
+      // Special case: agent:main:main on mikesai3 → rafael
+      if (sessionKey === "agent:main:main" && entry.gateway === "mikesai3" && !agentCache["rafael"]) {
+        agentCache["rafael"] = entry;
+      }
+
+      // Special case: agent:main:main on mikesai2 → gabriel
+      if (sessionKey === "agent:main:main" && entry.gateway === "mikesai2" && !agentCache["gabriel"]) {
+        agentCache["gabriel"] = entry;
       }
 
       // Special case: cron sessions for Rafael's team

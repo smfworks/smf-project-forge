@@ -67,6 +67,15 @@ export const TEAMS: Record<string, TeamConfig> = {
 export const AGENTS: AgentConfig[] = [
   // ── Rafael — Ops & Coordination ─────────────────────────────────────────
   {
+    id: "rafael",
+    name: "Rafael",
+    team: "rafael",
+    role: "Primary agent — Ops & Coordination",
+    model: "minimax-m2.7:cloud",
+    emoji: "🤖",
+    gateway: "rafael",
+  },
+  {
     id: "dwight-radar",
     name: "Dwight Radar",
     team: "rafael",
@@ -179,6 +188,15 @@ export const AGENTS: AgentConfig[] = [
   },
 
   // ── Gabriel — Research & Production ────────────────────────────────────
+  {
+    id: "gabriel",
+    name: "Gabriel",
+    team: "gabriel",
+    role: "Primary agent — Research & Production",
+    model: "minimax-m2.7:cloud",
+    emoji: "🔬",
+    gateway: "gabriel",
+  },
   {
     id: "harold-historian",
     name: "Harold Historian",

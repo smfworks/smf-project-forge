@@ -170,7 +170,9 @@ export async function upsertAgentStatusCache(entries: Array<{
 
 export async function getAgentStatusCache() {
   const db = await initDb();
-  const result: ResultSet = await db.execute("SELECT * FROM agent_status_cache");
+  const result: ResultSet = await db.execute(
+    "SELECT gateway, session_key, session_id, agent_id, model, kind, status, updated_at, last_seen FROM agent_status_cache"
+  );
   return (result.rows || []).map((r) => ({
     gateway: r.gateway as string,
     sessionKey: r.session_key as string,
@@ -179,8 +181,8 @@ export async function getAgentStatusCache() {
     model: r.model as string,
     kind: r.kind as string,
     status: r.status as "active" | "idle" | "blocked",
-    updatedAt: r.updated_at as number,
-    lastSeen: r.last_seen as number,
+    updatedAt: (r.updated_at as number) || 0,
+    lastSeen: (r.last_seen as number) || 0,
   }));
 }
 

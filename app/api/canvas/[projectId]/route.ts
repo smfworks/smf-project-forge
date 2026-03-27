@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getProject, listNodes, listArtifacts, listCanvasNodes, listCanvasEdges } from "@/lib/db";
-import { upsertCanvasNode, upsertCanvasEdge } from "@/lib/db";
+import { upsertCanvasNode, upsertCanvasEdge, deleteCanvasNodesForProject, deleteCanvasEdgesForProject } from "@/lib/db";
 
 // GET /api/canvas/[projectId]
 export async function GET(
@@ -117,6 +117,7 @@ export async function GET(
 }
 
 // PUT /api/canvas/[projectId]
+// Full replace: deletes all existing canvas nodes/edges then inserts new state
 export async function PUT(
   req: Request,
   { params }: { params: Promise<{ projectId: string }> }
@@ -129,8 +130,14 @@ export async function PUT(
       edges: Array<{ id: string; source: string; target: string }>;
     };
 
+    // Full replace: delete all existing canvas entries then insert new state
+    await deleteCanvasNodesForProject(projectId);
+    await deleteCanvasEdgesForProject(projectId);
+
     if (nodes?.length) {
       for (const n of nodes) {
+        // Skip the project bubble — it's computed at read time, not stored
+        if (n.id.startsWith("bubble-")) continue;
         await upsertCanvasNode({
           id: n.id,
           projectId,

@@ -273,5 +273,15 @@ export async function deleteCanvasEdge(id: string) {
   await db.execute({ sql: "DELETE FROM canvas_edges WHERE id = ?", args: [id] });
 }
 
+export async function deleteCanvasNodesForProject(projectId: string) {
+  const db = await initDb();
+  await db.execute({ sql: "DELETE FROM canvas_nodes WHERE project_id = ?", args: [projectId] });
+}
+
+export async function deleteCanvasEdgesForProject(projectId: string) {
+  const db = await initDb();
+  await db.execute({ sql: "DELETE FROM canvas_edges WHERE project_id = ?", args: [projectId] });
+}
+
 // Export the db instance for direct use
 export { initDb as db };

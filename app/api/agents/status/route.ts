@@ -9,47 +9,42 @@ export async function GET() {
     const cache = await getAgentStatusCache();
     const now = Date.now();
 
-    // Build a map of sessionKey → cached entry (most recent)
-    const cacheByKey: Record<string, typeof cache[0]> = {};
-    for (const entry of cache) {
-      const existing = cacheByKey[entry.sessionKey];
-      if (!existing || entry.lastSeen > existing.lastSeen) {
-        cacheByKey[entry.sessionKey] = entry;
+    // Deduplicate by (gateway, agentId) — one canonical entry per agent
+    const seen = new Set<string>();
+    const agentEntries: typeof cache = [];
+
+    // Sort by lastSeen descending so we keep the most recent for each agent
+    const sorted = [...cache].sort((a, b) => (b.lastSeen ?? 0) - (a.lastSeen ?? 0));
+
+    for (const entry of sorted) {
+      const key = `${entry.gateway}:${entry.agentId}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        agentEntries.push(entry);
       }
     }
 
-    // For each config agent, find matching cached session
-    const agentCache: Record<string, typeof cache[0]> = {};
-    for (const entry of Object.values(cacheByKey)) {
-      // Match by agentId or sessionKey pattern
-      const a = AGENTS.find(
-        (ag) =>
-          ag.id === entry.agentId ||
-          `agent:${entry.agentId}` === ag.id ||
-          entry.sessionKey.includes(ag.id) ||
-          // Match main sessions to Aiona
-          (entry.sessionKey === "agent:main:main" && ag.team === "aiona" && ag.gateway === "aiona")
-      );
-      if (a) {
-        const existing = agentCache[a.id];
-        if (!existing || entry.lastSeen > existing.lastSeen) {
-          agentCache[a.id] = entry;
-        }
+    // Build a lookup: agentId → cache entry
+    const cacheByAgentId: Record<string, typeof cache[0]> = {};
+    for (const entry of agentEntries) {
+      // Prefer exact agentId match
+      if (!cacheByAgentId[entry.agentId]) {
+        cacheByAgentId[entry.agentId] = entry;
       }
     }
 
-    // Build final status list — all config agents, with live status overlaid
+    // For each config agent, look up its live status
     const statuses = AGENTS.map((agent) => {
-      const entry = agentCache[agent.id];
+      const entry = cacheByAgentId[agent.id];
       const team = TEAMS[agent.team];
 
-      // Derive status
+      // Derive status from session age
       let status: "active" | "idle" | "blocked" = "idle";
       if (entry) {
         const ageMs = now - (entry.lastSeen ?? entry.updatedAt);
         if (entry.status === "blocked") status = "blocked";
         else if (entry.status === "active") status = "active";
-        else if (ageMs < 120_000) status = "active"; // Updated < 2 min ago
+        else if (ageMs < 120_000) status = "active"; // updated < 2 min ago
       }
 
       return {
@@ -70,7 +65,6 @@ export async function GET() {
     return NextResponse.json(statuses);
   } catch (err) {
     console.error("[forge] agent status error:", err);
-    // Fallback: return all agents as idle
     return NextResponse.json(
       AGENTS.map((a) => ({ id: a.id, name: a.name, team: a.team, status: "idle" as const }))
     );

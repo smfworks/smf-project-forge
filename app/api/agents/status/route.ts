@@ -38,13 +38,12 @@ export async function GET() {
       const entry = cacheByAgentId[agent.id];
       const team = TEAMS[agent.team];
 
-      // Derive status from session age
+      // Derive status from session age — always check current time, not cached status
       let status: "active" | "idle" | "blocked" = "idle";
       if (entry) {
-        const ageMs = now - (entry.lastSeen ?? entry.updatedAt);
-        if (entry.status === "blocked") status = "blocked";
-        else if (entry.status === "active") status = "active";
-        else if (ageMs < 120_000) status = "active"; // updated < 2 min ago
+        const ageMs = now - (entry.updatedAt ?? entry.lastSeen);
+        if (ageMs < 120_000) status = "active";       // session updated < 2 min ago
+        else if (entry.status === "blocked") status = "blocked";
       }
 
       return {

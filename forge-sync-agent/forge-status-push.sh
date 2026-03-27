@@ -13,16 +13,16 @@ FORGE_URL = "https://smf-project-forge.vercel.app/api/agents/status-push"
 API_KEY = "c609132c795b6d17e7ea88f156b9c6abdee549ccd5e1fec703899844e34a3543"
 
 def main():
-    # Get sessions from openclaw — active sessions last 2 min keeps payload small
+    # Get ALL sessions — ensures roster always has fresh state for active work
     result = subprocess.run(
-        ["openclaw", "sessions", "--all-agents", "--active", "2", "--json"],
+        ["openclaw", "sessions", "--all-agents", "--json"],
         capture_output=True, text=True, timeout=10
     )
     sessions_json = result.stdout if result.returncode == 0 else '{"sessions":[]}'
 
     payload = json.dumps({"gateway": GATEWAY, "sessions": sessions_json})
 
-    # Write payload to temp file — subprocess curl is faster than urllib
+    # Write payload to temp file — subprocess curl is more reliable than urllib
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         f.write(payload)
         tmp = f.name
@@ -30,11 +30,11 @@ def main():
     try:
         curl = subprocess.run(
             ["curl", "-s", "-X", "POST", FORGE_URL,
-              "-H", "Content-Type: application/json",
-              "-H", f"X-Forge-Api-Key: {API_KEY}",
-              "-d", f"@{tmp}",
-              "--max-time", "20"],
-            capture_output=True, text=True, timeout=25
+             "-H", "Content-Type: application/json",
+             "-H", "X-Forge-Api-Key: " + API_KEY,
+             "-d", "@" + tmp,
+             "--max-time", "30"],
+            capture_output=True, text=True, timeout=35
         )
         data = json.loads(curl.stdout) if curl.stdout else {}
         if data.get("ok"):
@@ -42,7 +42,10 @@ def main():
     except Exception as e:
         print(f"Push failed: {e}", flush=True)
     finally:
-        os.unlink(tmp)
+        try:
+            os.unlink(tmp)
+        except Exception:
+            pass
 
 if __name__ == "__main__":
     main()

@@ -46,7 +46,7 @@ export async function GET() {
       let status: "active" | "idle" | "blocked" = "idle";
       if (entry) {
         const ageMs = now - (entry.updatedAt ?? entry.lastSeen);
-        if (ageMs < 120_000) status = "active";       // session updated < 2 min ago
+        if (ageMs < 300_000) status = "active";       // session updated < 5 min ago
         else if (entry.status === "blocked") status = "blocked";
       }
 

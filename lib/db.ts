@@ -23,6 +23,8 @@ async function initDb(): Promise<Client> {
       await _db.execute(`CREATE TABLE IF NOT EXISTS agent_status (id TEXT PRIMARY KEY, name TEXT NOT NULL, team TEXT NOT NULL, model TEXT, current_task TEXT, status TEXT NOT NULL DEFAULT 'idle', updated_at INTEGER NOT NULL)`);
       await _db.execute(`CREATE TABLE IF NOT EXISTS queue_entries (id TEXT PRIMARY KEY, queue TEXT NOT NULL, machine TEXT NOT NULL, action TEXT NOT NULL, entry TEXT NOT NULL, created_at INTEGER NOT NULL)`);
       await _db.execute(`CREATE TABLE IF NOT EXISTS agent_status_cache (gateway TEXT NOT NULL, session_key TEXT NOT NULL, session_id TEXT NOT NULL, agent_id TEXT NOT NULL, model TEXT, kind TEXT NOT NULL DEFAULT 'direct', status TEXT NOT NULL DEFAULT 'idle', updated_at INTEGER NOT NULL, last_seen INTEGER NOT NULL, PRIMARY KEY (gateway, session_key))`);
+      await _db.execute(`CREATE TABLE IF NOT EXISTS canvas_nodes (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, node_type TEXT NOT NULL DEFAULT 'idea', label TEXT NOT NULL, team TEXT, source TEXT, position_x REAL NOT NULL DEFAULT 0, position_y REAL NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)`);
+      await _db.execute(`CREATE TABLE IF NOT EXISTS canvas_edges (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, source TEXT NOT NULL, target TEXT NOT NULL, edge_type TEXT NOT NULL DEFAULT 'default', created_at INTEGER NOT NULL)`);
     } catch (_e) {
       // Tables may already exist — continue
     }
@@ -184,6 +186,91 @@ export async function getAgentStatusCache() {
     updatedAt: (r.updated_at as number) || 0,
     lastSeen: (r.last_seen as number) || 0,
   }));
+}
+
+// ── Canvas node helpers ─────────────────────────────────────
+
+export async function listCanvasNodes(projectId: string) {
+  const db = await initDb();
+  const result: ResultSet = await db.execute({
+    sql: "SELECT * FROM canvas_nodes WHERE project_id = ? ORDER BY created_at ASC",
+    args: [projectId],
+  });
+  return (result.rows || []).map((r) => ({
+    id: r.id as string,
+    projectId: r.project_id as string,
+    nodeType: r.node_type as string,
+    label: r.label as string,
+    team: r.team as string | null,
+    source: r.source as string | null,
+    positionX: r.position_x as number,
+    positionY: r.position_y as number,
+    createdAt: r.created_at as number,
+  }));
+}
+
+export async function upsertCanvasNode(data: {
+  id: string;
+  projectId: string;
+  nodeType: string;
+  label: string;
+  team?: string;
+  source?: string;
+  positionX: number;
+  positionY: number;
+}) {
+  const db = await initDb();
+  const now = Date.now();
+  await db.execute({
+    sql: `INSERT INTO canvas_nodes (id, project_id, node_type, label, team, source, position_x, position_y, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            label = excluded.label, team = excluded.team, source = excluded.source,
+            position_x = excluded.position_x, position_y = excluded.position_y`,
+    args: [data.id, data.projectId, data.nodeType, data.label, data.team ?? null, data.source ?? null, data.positionX, data.positionY, now],
+  });
+}
+
+export async function deleteCanvasNode(id: string) {
+  const db = await initDb();
+  await db.execute({ sql: "DELETE FROM canvas_nodes WHERE id = ?", args: [id] });
+}
+
+export async function listCanvasEdges(projectId: string) {
+  const db = await initDb();
+  const result: ResultSet = await db.execute({
+    sql: "SELECT * FROM canvas_edges WHERE project_id = ?",
+    args: [projectId],
+  });
+  return (result.rows || []).map((r) => ({
+    id: r.id as string,
+    projectId: r.project_id as string,
+    source: r.source as string,
+    target: r.target as string,
+    edgeType: r.edge_type as string,
+  }));
+}
+
+export async function upsertCanvasEdge(data: {
+  id: string;
+  projectId: string;
+  source: string;
+  target: string;
+  edgeType?: string;
+}) {
+  const db = await initDb();
+  const now = Date.now();
+  await db.execute({
+    sql: `INSERT INTO canvas_edges (id, project_id, source, target, edge_type, created_at)
+          VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET source = excluded.source, target = excluded.target, edge_type = excluded.edge_type`,
+    args: [data.id, data.projectId, data.source, data.target, data.edgeType ?? "default", now],
+  });
+}
+
+export async function deleteCanvasEdge(id: string) {
+  const db = await initDb();
+  await db.execute({ sql: "DELETE FROM canvas_edges WHERE id = ?", args: [id] });
 }
 
 // Export the db instance for direct use

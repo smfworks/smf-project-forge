@@ -1,40 +1,44 @@
-#!/bin/bash
-# forge-status-push — Run via cron on each machine every 15 seconds
-# Posts openclaw session list to SMF Project Forge for live roster status
-#
-# Install:
-#   chmod +x /usr/local/bin/forge-status-push
-#   # Add to crontab:
-#   * * * * * /usr/local/bin/forge-status-push mikesai1 2>/dev/null
-#   * * * * * sleep 5; /usr/local/bin/forge-status-push mikesai1 2>/dev/null
-#   * * * * * sleep 10; /usr/local/bin/forge-status-push mikesai1 2>/dev/null
-#   * * * * * sleep 15; /usr/local/bin/forge-status-push mikesai1 2>/dev/null
-#   ... (repeat across machines with mikesai2, mikesai3)
-#
-# The FORGE_API_KEY env var must be set (or hardcoded below).
+#!/usr/bin/env python3
+"""
+forge-status-push — Posts openclaw session list to SMF Project Forge.
+Runs every 5 seconds via cron. No external dependencies.
+"""
+import subprocess
+import urllib.request
+import json
+import os
 
-set -euo pipefail
+GATEWAY = os.environ.get("GATEWAY_NAME", "mikesai1")
+FORGE_URL = "https://smf-project-forge.vercel.app/api/agents/status-push"
+API_KEY = "c609132c795b6d17e7ea88f156b9c6abdee549ccd5e1fec703899844e34a3543"
 
-GATEWAY="${1:-mikesai1}"
-FORGE_URL="${FORGE_URL:-https://smf-project-forge.vercel.app}"
-API_KEY="${FORGE_API_KEY:-}"  # Set via environment or edit below
+def main():
+    # Get sessions from openclaw
+    result = subprocess.run(
+        ["openclaw", "sessions", "--all-agents", "--json"],
+        capture_output=True, text=True, timeout=10
+    )
+    sessions_json = result.stdout if result.returncode == 0 else '{"sessions":[]}'
 
-# ── CONFIG: Set your API key here if not using env var ──────────────────────
-# API_KEY="your-forge-api-key-here"
+    payload = json.dumps({"gateway": GATEWAY, "sessions": sessions_json}).encode()
 
-if [[ -z "$API_KEY" ]]; then
-  echo "ERROR: FORGE_API_KEY not set. Edit this script or export FORGE_API_KEY."
-  exit 1
-fi
+    req = urllib.request.Request(
+        FORGE_URL,
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "X-Forge-Api-Key": API_KEY,
+        },
+        method="POST",
+    )
 
-# Get session JSON from local openclaw gateway
-SESSIONS=$(openclaw sessions --all-agents --json 2>/dev/null || echo '{"sessions":[]}')
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+            if data.get("ok"):
+                print(f"Pushed {data.get('count', 0)} sessions for {GATEWAY}")
+    except Exception as e:
+        print(f"Push failed: {e}", flush=True)
 
-# POST to Forge
-curl -s -X POST "${FORGE_URL}/api/agents/status-push" \
-  -H "Content-Type: application/json" \
-  -H "X-Forge-Api-Key: ${API_KEY}" \
-  -d "{\"gateway\":\"${GATEWAY}\",\"sessions\":${SESSIONS}}" \
-  > /dev/null
-
-echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) ${GATEWAY} status pushed"
+if __name__ == "__main__":
+    main()

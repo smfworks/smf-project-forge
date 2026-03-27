@@ -9,33 +9,46 @@ export async function GET() {
     const cache = await getAgentStatusCache();
     const now = Date.now();
 
-    // Map cache entries to AgentLiveStatus objects, matching against our config
-    const statuses = cache.map((entry) => {
-      // Find matching config agent by ID
+    // Deduplicate by agentId — keep the most recently updated entry
+    const byAgent: Record<string, typeof cache[0]> = {};
+    for (const entry of cache) {
+      const existing = byAgent[entry.agentId];
+      if (!existing || entry.lastSeen > existing.lastSeen) {
+        byAgent[entry.agentId] = entry;
+      }
+    }
+
+    // Map to final status objects
+    const statuses = Object.values(byAgent).map((entry) => {
+      // Find matching config agent
       const configAgent = AGENTS.find(
         (a) =>
           a.id === entry.agentId ||
           a.id === `agent:${entry.agentId}` ||
-          entry.sessionKey.includes(a.id)
+          entry.sessionKey.includes(a.id) ||
+          // Match by session kind: "main" → primary agents
+          (entry.sessionKey === "agent:main:main" && a.team === "aiona") ||
+          (entry.sessionKey.includes(":cron:") && a.team === "rafael")
       );
 
-      // Determine status
-      let status: "active" | "idle" | "blocked" = entry.status;
-      if (!configAgent && entry.status === "idle" && entry.kind === "direct") {
-        // Active main session with no matching config = likely active
-        if (entry.sessionKey.includes(":main:main") && now - entry.updatedAt < 90_000) {
-          status = "active";
-        }
+      // Recompute status from current time — not stale cached ageMs
+      let status: "active" | "idle" | "blocked" = "idle";
+      if (entry.status === "blocked") status = "blocked";
+      else if (entry.status === "active") status = "active";
+      else {
+        // Fallback: session updated in last 2 minutes = active
+        const ageMs = now - (entry.updatedAt ?? entry.lastSeen);
+        if (ageMs < 120_000) status = "active";
       }
 
       return {
-        id: entry.agentId,
-        name: configAgent?.name ?? entry.agentId,
+        id: configAgent?.id ?? entry.agentId,
+        name: configAgent?.name ?? (entry.agentId === "main" ? "Aiona (main)" : entry.agentId),
         team: configAgent?.team ?? inferTeam(entry),
         gateway: entry.gateway,
         status,
         currentTask: entry.kind === "cron" ? "Cron job" : undefined,
-        model: entry.model,
+        model: entry.model || configAgent?.model,
         lastSeen: entry.lastSeen,
       };
     });
@@ -43,12 +56,12 @@ export async function GET() {
     return NextResponse.json(statuses);
   } catch (err) {
     console.error("[forge] agent status error:", err);
-    // Return empty array rather than error — roster shows all idle
     return NextResponse.json([]);
   }
 }
 
 function inferTeam(entry: { gateway: string; sessionKey: string }): string {
+  if (entry.sessionKey.includes(":cron:")) return "rafael";
   if (entry.gateway.includes("mikesai3")) return "rafael";
   if (entry.gateway.includes("mikesai2")) return "gabriel";
   return "aiona";

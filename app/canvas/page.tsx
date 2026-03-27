@@ -42,9 +42,15 @@ export default function CanvasPage() {
       .then((r) => r.json())
       .then((data) => {
         setProjects(data);
-        // Auto-select first project if none selected
-        if (data.length > 0 && !selectedProject) {
-          selectProject(data[0]);
+        // Sort: aiona first, then rafael, then gabriel, then others
+        const sorted = [...data].sort((a, b) => {
+          const order: Record<string, number> = { aiona: 0, rafael: 1, gabriel: 2 };
+          return (order[a.name.toLowerCase()] ?? 99) - (order[b.name.toLowerCase()] ?? 99);
+        });
+        setProjects(sorted);
+        // Auto-select aiona first
+        if (sorted.length > 0 && !selectedProject) {
+          selectProject(sorted[0]);
         }
       })
       .catch(console.error);

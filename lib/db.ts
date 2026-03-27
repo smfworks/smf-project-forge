@@ -15,13 +15,14 @@ async function initDb(): Promise<Client> {
       url: process.env.TURSO_DATABASE_URL,
       authToken: process.env.TURSO_AUTH_TOKEN,
     });
-    // Initialize tables on first connect (best-effort — table may already exist)
+    // Initialize all tables (best-effort — each may already exist)
     try {
       await _db.execute(`CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'other', phase INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'active', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
       await _db.execute(`CREATE TABLE IF NOT EXISTS nodes (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, phase INTEGER NOT NULL DEFAULT 0, type TEXT NOT NULL DEFAULT 'idea', title TEXT, content TEXT, team TEXT, source TEXT, parent_id TEXT, position_x REAL DEFAULT 0, position_y REAL DEFAULT 0, created_at INTEGER NOT NULL)`);
       await _db.execute(`CREATE TABLE IF NOT EXISTS artifacts (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, phase INTEGER NOT NULL DEFAULT 0, type TEXT NOT NULL, title TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1, content TEXT, gdoc_url TEXT, local_path TEXT, agent_id TEXT, status TEXT NOT NULL DEFAULT 'draft', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)`);
       await _db.execute(`CREATE TABLE IF NOT EXISTS agent_status (id TEXT PRIMARY KEY, name TEXT NOT NULL, team TEXT NOT NULL, model TEXT, current_task TEXT, status TEXT NOT NULL DEFAULT 'idle', updated_at INTEGER NOT NULL)`);
       await _db.execute(`CREATE TABLE IF NOT EXISTS queue_entries (id TEXT PRIMARY KEY, queue TEXT NOT NULL, machine TEXT NOT NULL, action TEXT NOT NULL, entry TEXT NOT NULL, created_at INTEGER NOT NULL)`);
+      await _db.execute(`CREATE TABLE IF NOT EXISTS agent_status_cache (gateway TEXT NOT NULL, session_key TEXT NOT NULL, session_id TEXT NOT NULL, agent_id TEXT NOT NULL, model TEXT, kind TEXT NOT NULL DEFAULT 'direct', status TEXT NOT NULL DEFAULT 'idle', updated_at INTEGER NOT NULL, last_seen INTEGER NOT NULL, PRIMARY KEY (gateway, session_key))`);
     } catch (_e) {
       // Tables may already exist — continue
     }
@@ -139,3 +140,49 @@ export async function createArtifact(data: {
   });
   return { id, ...data, phase: data.phase ?? 0, version: 1, status: "draft" as const, createdAt: now, updatedAt: now };
 }
+
+// ── Agent status cache helpers ─────────────────────────────
+
+export async function upsertAgentStatusCache(entries: Array<{
+  gateway: string;
+  sessionKey: string;
+  sessionId: string;
+  agentId: string;
+  model: string;
+  kind: string;
+  status: "active" | "idle" | "blocked";
+  updatedAt: number;
+}>) {
+  const db = await initDb();
+  const now = Date.now();
+  for (const e of entries) {
+    await db.execute({
+      sql: `INSERT INTO agent_status_cache (gateway, session_key, session_id, agent_id, model, kind, status, updated_at, last_seen)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(gateway, session_key) DO UPDATE SET
+              session_id = excluded.session_id, agent_id = excluded.agent_id,
+              model = excluded.model, kind = excluded.kind, status = excluded.status,
+              updated_at = excluded.updated_at, last_seen = excluded.last_seen`,
+      args: [e.gateway, e.sessionKey, e.sessionId, e.agentId, e.model, e.kind, e.status, e.updatedAt, now],
+    });
+  }
+}
+
+export async function getAgentStatusCache() {
+  const db = await initDb();
+  const result: ResultSet = await db.execute("SELECT * FROM agent_status_cache");
+  return (result.rows || []).map((r) => ({
+    gateway: r.gateway as string,
+    sessionKey: r.session_key as string,
+    sessionId: r.session_id as string,
+    agentId: r.agent_id as string,
+    model: r.model as string,
+    kind: r.kind as string,
+    status: r.status as "active" | "idle" | "blocked",
+    updatedAt: r.updated_at as number,
+    lastSeen: r.last_seen as number,
+  }));
+}
+
+// Export the db instance for direct use
+export { initDb as db };

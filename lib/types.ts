@@ -41,3 +41,14 @@ export interface Artifact {
   createdAt: number;
   updatedAt: number;
 }
+
+export interface AgentLiveStatus {
+  id: string;
+  name: string;
+  team: string;
+  gateway: string;
+  status: "active" | "idle" | "blocked";
+  model: string;
+  currentTask?: string;
+  lastSeen?: number;
+}

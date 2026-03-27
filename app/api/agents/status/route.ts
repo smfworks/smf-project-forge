@@ -7,7 +7,7 @@ import { AGENTS, TEAMS } from "@/lib/config";
 export async function GET() {
   try {
     const cache = await getAgentStatusCache();
-    const now = Date.now();
+    const nowMs = Date.now();  // milliseconds — matches entry.lastSeen format
 
     // Step 1: Deduplicate by sessionKey — keep most recent entry per session
     const byKey: Record<string, typeof cache[0]> = {};
@@ -47,9 +47,12 @@ export async function GET() {
       const team = TEAMS[agent.team];
 
       // Derive status from session age at read time (always fresh)
+      // Use updatedAt from the session itself — more reliable than lastSeen
       let status: "active" | "idle" | "blocked" = "idle";
       if (entry) {
-        const ageMs = now - (entry.updatedAt ?? entry.lastSeen ?? now);
+        const ageMs = (entry.updatedAt ?? 0) > 0
+          ? nowMs - entry.updatedAt
+          : 999_999_999; // no session data = idle
         if (ageMs < 600_000) status = "active";     // updated < 10 min ago
         else if (entry.status === "blocked") status = "blocked";
       }

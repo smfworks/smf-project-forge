@@ -131,6 +131,16 @@ export const AGENTS: AgentConfig[] = [
     emoji: "🔍",
     gateway: "aiona",
   },
+  // Aiona Edge — primary agent (this is Michael's main AI assistant)
+  {
+    id: "aiona-edge",
+    name: "Aiona Edge",
+    team: "aiona",
+    role: "Primary AI assistant to Michael — orchestration, writing, research, coordination",
+    model: "minimax-m2.7:cloud",
+    emoji: "🎯",
+    gateway: "aiona",
+  },
   {
     id: "quinn-writer",
     name: "Quinn Writer",

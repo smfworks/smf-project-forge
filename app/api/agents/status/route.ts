@@ -27,9 +27,13 @@ export async function GET() {
     // Build a lookup: agentId → cache entry
     const cacheByAgentId: Record<string, typeof cache[0]> = {};
     for (const entry of agentEntries) {
-      // Prefer exact agentId match
+      // Exact agentId match
       if (!cacheByAgentId[entry.agentId]) {
         cacheByAgentId[entry.agentId] = entry;
+      }
+      // Also map main session → aiona-edge (Michael's primary AI)
+      if (entry.sessionKey === "agent:main:main" && !cacheByAgentId["aiona-edge"]) {
+        cacheByAgentId["aiona-edge"] = entry;
       }
     }
 

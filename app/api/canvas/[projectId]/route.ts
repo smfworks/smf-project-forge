@@ -25,9 +25,11 @@ export async function GET(
     // Build all nodes — project bubble, real nodes, real artifacts, custom nodes
     const rfNodes: Array<{ id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown> }> = [];
 
-    // Project bubble
+    const bubbleId = `bubble-${projectId}`;
+
+    // Project bubble — always use canonical bubbleId
     rfNodes.push({
-      id: `bubble-${projectId}`,
+      id: bubbleId,
       type: "bubble",
       position: { x: 350, y: 200 },
       data: { label: project.name, team: project.name, childCount: nodes.length + artifacts.length },
@@ -55,9 +57,13 @@ export async function GET(
       });
     });
 
-    // Custom user-added nodes
+    // Custom user-added nodes (not from project data, not extra bubbles)
     canvasNodes
-      .filter((cn) => !nodes.find((n) => n.id === cn.id) && !artifacts.find((a) => a.id === cn.id))
+      .filter((cn) =>
+        !cn.id.startsWith("bubble-") &&
+        !nodes.find((n) => n.id === cn.id) &&
+        !artifacts.find((a) => a.id === cn.id)
+      )
       .forEach((cn) => {
         rfNodes.push({
           id: cn.id,

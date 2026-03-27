@@ -1,0 +1,23 @@
+{
+  "machine": "mikesai3",
+  "api_url": "https://forge.smfworks.com",
+  "api_key": "CHANGE_ME",
+  "queues": [
+    {
+      "name": "opportunities",
+      "path": "/home/mikesai3/.openclaw/workspace/smf-agents/shared/data/opportunities.json"
+    },
+    {
+      "name": "proposals",
+      "path": "/home/mikesai3/.openclaw/workspace/smf-agents/shared/data/proposals.json"
+    },
+    {
+      "name": "missions",
+      "path": "/home/mikesai3/.openclaw/workspace/smf-agents/shared/data/missions.json"
+    },
+    {
+      "name": "completed",
+      "path": "/home/mikesai3/.openclaw/workspace/smf-agents/shared/data/completed.json"
+    }
+  ]
+}

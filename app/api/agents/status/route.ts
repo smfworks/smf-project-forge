@@ -1,74 +1,55 @@
-/**
- * GET /api/agents/status
- *
- * Returns live agent statuses for the roster page.
- * Reads from the Turso cache (populated by gateway push scripts).
- */
-import { getAgentStatusCache } from "@/lib/db";
 import { NextResponse } from "next/server";
+import { getAgentStatusCache } from "@/lib/db";
 import { AGENTS } from "@/lib/config";
 
+// GET /api/agents/status
+// Returns live agent statuses from the cache (populated by machine push scripts)
 export async function GET() {
-  let cache: Array<{
-    gateway: string;
-    sessionKey: string;
-    sessionId: string;
-    agentId: string;
-    model: string;
-    kind: string;
-    status: "active" | "idle" | "blocked";
-    updatedAt: number;
-    lastSeen: number;
-  }>;
-
   try {
-    cache = await getAgentStatusCache();
-  } catch {
-    // If DB not configured, return empty — roster falls back to idle
-    return NextResponse.json([], { status: 200 });
-  }
+    const cache = await getAgentStatusCache();
+    const now = Date.now();
 
-  // Build lookup: agentId → latest status across all gateways
-  const latest: Record<string, typeof cache[number]> = {};
-  for (const row of cache) {
-    const existing = latest[row.agentId];
-    if (!existing || row.lastSeen > existing.lastSeen) {
-      latest[row.agentId] = row;
-    }
-  }
+    // Map cache entries to AgentLiveStatus objects, matching against our config
+    const statuses = cache.map((entry) => {
+      // Find matching config agent by ID
+      const configAgent = AGENTS.find(
+        (a) =>
+          a.id === entry.agentId ||
+          a.id === `agent:${entry.agentId}` ||
+          entry.sessionKey.includes(a.id)
+      );
 
-  // Map to the 28 known agents (from config)
-  const statuses = AGENTS.map((agent) => {
-    const cached = latest[agent.id];
+      // Determine status
+      let status: "active" | "idle" | "blocked" = entry.status;
+      if (!configAgent && entry.status === "idle" && entry.kind === "direct") {
+        // Active main session with no matching config = likely active
+        if (entry.sessionKey.includes(":main:main") && now - entry.updatedAt < 90_000) {
+          status = "active";
+        }
+      }
 
-    if (!cached) {
       return {
-        id: agent.id,
-        name: agent.name,
-        team: agent.team,
-        gateway: agent.gateway,
-        status: "idle" as const,
-        model: agent.model,
+        id: entry.agentId,
+        name: configAgent?.name ?? entry.agentId,
+        team: configAgent?.team ?? inferTeam(entry),
+        gateway: entry.gateway,
+        status,
+        currentTask: entry.kind === "cron" ? "Cron job" : undefined,
+        model: entry.model,
+        lastSeen: entry.lastSeen,
       };
-    }
+    });
 
-    // For main sessions, map to agent name
-    const isCron = cached.kind === "cron";
-    const currentTask = isCron
-      ? `Cron: ${cached.sessionKey.split(":")[3]?.slice(0, 8) ?? "job"}...`
-      : undefined;
+    return NextResponse.json(statuses);
+  } catch (err) {
+    console.error("[forge] agent status error:", err);
+    // Return empty array rather than error — roster shows all idle
+    return NextResponse.json([]);
+  }
+}
 
-    return {
-      id: agent.id,
-      name: agent.name,
-      team: agent.team,
-      gateway: cached.gateway,
-      status: cached.status,
-      model: cached.model || agent.model,
-      currentTask,
-      lastSeen: cached.lastSeen,
-    };
-  });
-
-  return NextResponse.json(statuses);
+function inferTeam(entry: { gateway: string; sessionKey: string }): string {
+  if (entry.gateway.includes("mikesai3")) return "rafael";
+  if (entry.gateway.includes("mikesai2")) return "gabriel";
+  return "aiona";
 }

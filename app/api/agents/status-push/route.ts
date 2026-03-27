@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { upsertAgentStatusCache } from "@/lib/db";
 import { parseSessionsOutput } from "@/lib/gateway";
+import { createGunzip } from "zlib";
 
 // POST /api/agents/status-push
 // Machines call this to push their openclaw sessions JSON to Forge
@@ -12,14 +13,32 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = await req.json() as { gateway: string; sessions: string };
+    const contentEncoding = req.headers.get("content-encoding") ?? "";
+    let body: string;
 
-    if (!body.gateway || !body.sessions) {
+    if (contentEncoding === "gzip") {
+      // Decompress gzip payload
+      const buffer = await req.arrayBuffer();
+      body = await new Promise<string>((resolve, reject) => {
+        const gzip = createGunzip();
+        const chunks: Buffer[] = [];
+        gzip.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+        gzip.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+        gzip.on("error", reject);
+        gzip.end(Buffer.from(buffer));
+      });
+    } else {
+      body = await req.text();
+    }
+
+    const { gateway, sessions } = JSON.parse(body) as { gateway: string; sessions: string };
+
+    if (!gateway || !sessions) {
       return NextResponse.json({ error: "Missing gateway or sessions" }, { status: 400 });
     }
 
     // Parse the openclaw sessions --json output
-    const parsed = parseSessionsOutput(body.gateway, body.sessions);
+    const parsed = parseSessionsOutput(gateway, sessions);
 
     // Convert to cache entries — derive status from age + abort flag
     const entries = parsed.map((s) => {
@@ -27,7 +46,7 @@ export async function POST(req: NextRequest) {
       if (s.abortedLastRun) status = "blocked";
       else if (s.ageMs < 90_000) status = "active";
       return {
-        gateway: body.gateway,
+        gateway,
         sessionKey: s.sessionKey,
         sessionId: s.sessionId,
         agentId: s.agentId,

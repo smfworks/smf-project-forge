@@ -1,55 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { getDb } from "@/lib/db";
 import { projects } from "@/lib/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq } from "drizzle-orm";
+import { randomUUID } from "crypto";
 
+// GET /api/projects — List all projects
+// POST /api/projects — Create a new project
 export async function GET() {
   try {
-    const allProjects = await db.select().from(projects).orderBy(desc(projects.updatedAt));
-    return NextResponse.json(allProjects);
-  } catch (error) {
-    console.error("Failed to fetch projects:", error);
-    // Return demo data if DB not configured
-    return NextResponse.json([
-      {
-        id: "demo",
-        name: "AI Orchestration Series",
-        type: "blog",
-        phase: 2,
-        status: "active",
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      },
-    ]);
+    const db = getDb();
+    const all = db.select().from(projects).all();
+    return NextResponse.json(all);
+  } catch (err) {
+    return NextResponse.json({ error: "Failed to fetch projects" }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name, type, description } = body;
+    const { name, type = "other" } = body;
 
-    if (!name || !type) {
-      return NextResponse.json({ error: "name and type required" }, { status: 400 });
+    if (!name) {
+      return NextResponse.json({ error: "Project name is required" }, { status: 400 });
     }
 
-    const id = crypto.randomUUID();
+    const db = getDb();
     const now = new Date();
-
-    await db.insert(projects).values({
-      id,
+    const newProject = {
+      id: randomUUID(),
       name,
       type,
-      description,
       phase: 0,
-      status: "active",
+      status: "active" as const,
       createdAt: now,
       updatedAt: now,
-    });
+    };
 
-    return NextResponse.json({ id, name, type, phase: 0, status: "active", createdAt: now, updatedAt: now });
-  } catch (error) {
-    console.error("Failed to create project:", error);
+    db.insert(projects).values(newProject).run();
+    return NextResponse.json(newProject, { status: 201 });
+  } catch (err) {
     return NextResponse.json({ error: "Failed to create project" }, { status: 500 });
   }
 }
+
+export const dynamic = "force-dynamic";

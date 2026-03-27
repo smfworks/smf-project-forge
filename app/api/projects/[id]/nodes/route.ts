@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { getDb } from "@/lib/db";
 import { nodes } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -9,6 +9,7 @@ import { randomUUID } from "crypto";
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
+    const db = getDb();
     const result = db.select().from(nodes).where(eq(nodes.projectId, id)).all();
     return NextResponse.json(result);
   } catch (err) {
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const body = await req.json();
     const { phase = 0, type = "idea", title, content, team, source, parentId, positionX = 0, positionY = 0 } = body;
-
+    const db = getDb();
     const newNode = {
       id: randomUUID(),
       projectId: id,
@@ -36,10 +37,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       positionY,
       createdAt: new Date(),
     };
-
     db.insert(nodes).values(newNode).run();
     return NextResponse.json(newNode, { status: 201 });
   } catch (err) {
     return NextResponse.json({ error: "Failed to create node" }, { status: 500 });
   }
 }
+
+export const dynamic = "force-dynamic";
